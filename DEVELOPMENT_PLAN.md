@@ -148,12 +148,12 @@ After v3.0.0 is published and verified:
 
    This repository has been superseded by a rewrite.
 
-   **New repository:** [access-qa-bot](https://github.com/necyberteam/access-qa-bot)
+   **New repository:** [access-qa-bot](https://github.com/connectci-platform/access-qa-bot)
 
    The npm package `@snf/access-qa-bot` continues from v3.0.0 in the new repo.
 
    - For v2.x and earlier: This repo (archived)
-   - For v3.0.0+: See [access-qa-bot](https://github.com/necyberteam/access-qa-bot)
+   - For v3.0.0+: See [access-qa-bot](https://github.com/connectci-platform/access-qa-bot)
    ```
 
 2. **Archive the repo on GitHub** (Settings → Archive)

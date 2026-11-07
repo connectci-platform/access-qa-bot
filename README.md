@@ -1,6 +1,6 @@
 # ACCESS Q&A Bot
 
-A React wrapper around [@snf/qa-bot-core](https://github.com/necyberteam/qa-bot-core) that adds ACCESS-specific functionality. This package serves two purposes:
+A React wrapper around [@snf/qa-bot-core](https://github.com/connectci-platform/qa-bot-core) that adds ACCESS-specific functionality. This package serves two purposes:
 
 1. **Production use**: The official Q&A bot for ACCESS websites
 2. **Reference implementation**: An example of how to build organization-specific wrappers around qa-bot-core
@@ -196,11 +196,14 @@ bot.destroy();
 <script src="https://unpkg.com/@snf/access-qa-bot@3.0.0/dist/access-qa-bot.standalone.js"></script>
 ```
 
-#### jsdelivr (GitHub-based)
+#### jsdelivr (npm-based)
 
 ```html
-<script src="https://cdn.jsdelivr.net/gh/necyberteam/access-qa-bot@v3.0.0/dist/access-qa-bot.standalone.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@snf/access-qa-bot@3.0.0/dist/access-qa-bot.standalone.js"></script>
 ```
+
+jsDelivr's GitHub-based path (`/gh/...`) doesn't work for this package:
+`dist/` isn't committed, so tags contain no built files.
 
 ---
 
@@ -403,6 +406,39 @@ VITE_METRICS_API_ENDPOINT=https://your-metrics-api.com/
 VITE_API_KEY=your_api_key_here
 ```
 
+### Agent mode
+
+These are baked in when the package is built, like the other `VITE_*`
+values, so changing them means republishing. `VITE_AGENT_ENDPOINT` is
+required for a flag-on build; its default is `http://localhost:8000/api/v1`,
+for local development only:
+
+```env
+VITE_AGENT_ENABLED=true                         # off by default
+VITE_AGENT_ENDPOINT=https://qa.access-ci.org/api/v1
+VITE_SUPPORT_URL=https://support.access-ci.org  # the default
+```
+
+With `VITE_AGENT_ENABLED=true`:
+- Questions go to `${VITE_AGENT_ENDPOINT}/query`. The `qaEndpoint` prop is
+  ignored.
+- The bot signs in to the agent with a short-lived token from
+  `VITE_SUPPORT_URL` (`/api/agent-token`), and sign-in opens that site's
+  `/user/login` in a popup. The `isLoggedIn` and `loginUrl` props are ignored.
+- The token is sent only to the built-in agent. If a host sets
+  `agentEndpoint` to another origin, agent sign-in is turned off for that
+  bot.
+- Anonymous questions are allowed. The agent decides which tools need
+  sign-in, and it challenges anonymous callers with Turnstile itself. If
+  agent sign-in is off for a bot (an off-origin `agentEndpoint`),
+  `VITE_ALLOW_ANON_ACCESS` applies as usual.
+
+`prepack` builds from whatever local `.env*` files are there, then
+`scripts/check-publish-flags.mjs` fails the publish if the build has agent
+mode on. For a deliberate agent-mode release, set `ALLOW_AGENT_PUBLISH=true`
+along with `VITE_AGENT_ENDPOINT`; the check also fails if the endpoint is
+still the localhost default.
+
 ## Development
 
 ```bash
@@ -437,8 +473,8 @@ This package continues the `@snf/access-qa-bot` npm package:
 
 | Version | Repository | Notes |
 |---------|------------|-------|
-| v0.x - v2.x | [qa-bot](https://github.com/necyberteam/qa-bot) (deprecated) | Original implementation |
-| v3.0.0+ | [access-qa-bot](https://github.com/necyberteam/access-qa-bot) (this repo) | Rewrite using qa-bot-core |
+| v0.x - v2.x | [qa-bot](https://github.com/connectci-platform/qa-bot) (deprecated) | Original implementation |
+| v3.0.0+ | [access-qa-bot](https://github.com/connectci-platform/access-qa-bot) (this repo) | Rewrite using qa-bot-core |
 
 ### What's New in v3.0.0
 

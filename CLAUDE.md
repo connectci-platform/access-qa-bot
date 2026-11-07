@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This repository is a React/TypeScript wrapper around [@snf/qa-bot-core](https://github.com/necyberteam/qa-bot-core) that adds ACCESS-specific functionality. The project provides:
+This repository is a React/TypeScript wrapper around [@snf/qa-bot-core](https://github.com/connectci-platform/qa-bot-core) that adds ACCESS-specific functionality. The project provides:
 1. A React component library (ESM/UMD formats)
 2. A standalone JavaScript bundle (IIFE with Preact)
 3. TypeScript definitions

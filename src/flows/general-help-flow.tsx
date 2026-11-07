@@ -28,7 +28,7 @@ interface FlowParams {
 
 export interface ChatState {
   userInput: string;
-  prevPath?: string;
+  prevPath?: string | null;
 }
 
 // Keywords list from old qa-bot
