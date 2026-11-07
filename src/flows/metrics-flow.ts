@@ -6,6 +6,7 @@
  */
 
 import { v4 as uuidv4 } from 'uuid';
+import type { Params } from 'react-chatbotify';
 import { API_CONFIG } from '../config/constants';
 import type { TrackEventFn } from '../utils/analytics';
 
@@ -15,10 +16,6 @@ interface FlowParams {
   trackEvent: TrackEventFn;
 }
 
-interface ChatState {
-  userInput: string;
-  injectMessage: (message: string) => Promise<void>;
-}
 
 /**
  * Process text response from API - basic markdown/HTML handling
@@ -45,7 +42,7 @@ export function createMetricsFlow({ sessionId, apiKey, trackEvent }: FlowParams)
 
     // Main question/answer loop
     metrics_loop: {
-      message: async (chatState: ChatState) => {
+      message: async (chatState: Params) => {
         const { userInput } = chatState;
 
         // Handle feedback first if it's feedback
@@ -113,7 +110,7 @@ export function createMetricsFlow({ sessionId, apiKey, trackEvent }: FlowParams)
               await chatState.injectMessage("Ask another question about usage and performance metrics (XDMoD) or start a new chat.");
             }, 100);
 
-            return null;
+            return;
           } catch (error) {
             console.error('Error in metrics flow:', error);
             return "I'm sorry, there was an error processing your question. Please try again.";
@@ -121,7 +118,7 @@ export function createMetricsFlow({ sessionId, apiKey, trackEvent }: FlowParams)
         }
       },
       renderMarkdown: ["BOT"],
-      options: (chatState: ChatState) => {
+      options: (chatState: Params) => {
         // Only show feedback options if the input isn't already feedback
         if (chatState.userInput === "👍 Helpful" || chatState.userInput === "👎 Not helpful") {
           return []; // No options after feedback is given

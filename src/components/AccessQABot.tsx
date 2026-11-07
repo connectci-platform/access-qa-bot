@@ -1,5 +1,6 @@
 import { forwardRef, useImperativeHandle, useRef, useState, useMemo, useEffect, useCallback } from 'react';
-import { QABot, applyFlowSettings } from '@snf/qa-bot-core';
+import { QABot, applyFlowSettings, type QABotAnalyticsEvent } from '@snf/qa-bot-core';
+import { accessAgentAuth } from '../config/agent-auth';
 import type { AccessQABotProps, AccessQABotRef, CapabilitiesResponse } from '../types';
 import { API_CONFIG, BOT_CONFIG, scopedWelcomeMessage } from '../config/constants';
 import { createMainMenuFlow, createTicketFlow, createSecurityFlow, createMetricsFlow } from '../flows';
@@ -58,10 +59,9 @@ export const AccessQABot = forwardRef<AccessQABotRef, AccessQABotProps>(
     const scope = scopeSlug ?? resourceContext;
 
     // Non-agentic mode: Q&A goes through qa-bot-proxy → UKY RAG directly,
-    // and the agent's /capabilities + /capabilities/personalized endpoints
-    // are never called. AGENT_ENABLED is baked at this library's publish
-    // time (Vite env), so this is effectively a constant — flipping it
-    // requires republishing.
+    // and the agent's /capabilities endpoint is never called. AGENT_ENABLED
+    // is baked at this library's publish time (Vite env), so this is
+    // effectively a constant — flipping it requires republishing.
     const agentEnabled = API_CONFIG.AGENT_ENABLED;
     const effectiveBackendId = backendId || API_CONFIG.BACKEND_ID;
 
@@ -100,11 +100,25 @@ export const AccessQABot = forwardRef<AccessQABotRef, AccessQABotProps>(
     }, [ticketForm]);
 
     // Derive agent API URLs
-    const agentBaseUrl = agentEndpoint || API_CONFIG.AGENT_ENDPOINT;
+    // A trailing slash would give the agent `//query`, which it 404s.
+    const agentBaseUrl = (agentEndpoint || API_CONFIG.AGENT_ENDPOINT).replace(/\/+$/, '');
     const capabilitiesEndpoint = scope
       ? `${agentBaseUrl}/capabilities?resource_context=${encodeURIComponent(scope)}`
       : `${agentBaseUrl}/capabilities`;
     const agentRatingEndpoint = `${agentBaseUrl}/rating`;
+
+    // Agent mode signs in to the agent with a support-site token, and
+    // questions go to the agent itself. accessAgentAuth refuses a host
+    // agentEndpoint on another origin, so a page can't redirect the token.
+    const agentAuth = useMemo(
+      () => (agentEnabled ? accessAgentAuth(agentBaseUrl) : null),
+      [agentEnabled, agentBaseUrl]
+    );
+    const effectiveQaEndpoint = agentEnabled ? `${agentBaseUrl}/query` : qaEndpoint || API_CONFIG.QA_ENDPOINT;
+    // The host's login state, which agent mode doesn't use: sign-in comes
+    // from the token inside qa-bot-core. Kept out of the memos and effects
+    // in agent mode, so a host isLoggedIn change can't rebuild the flow.
+    const hostLoggedIn = agentEnabled ? null : isLoggedIn;
 
     // Warn about common deployment misconfigurations
     useEffect(() => {
@@ -114,13 +128,18 @@ export const AccessQABot = forwardRef<AccessQABotRef, AccessQABotProps>(
           'Set VITE_AGENT_ENDPOINT in your environment.'
         );
       }
-      if (API_CONFIG.ALLOW_ANON_ACCESS && !API_CONFIG.TURNSTILE_SITE_KEY) {
+      if (agentEnabled && qaEndpoint) {
+        console.warn('[AccessQABot] qaEndpoint is ignored in agent mode; questions go to the agent.');
+      }
+      // In agent mode the agent challenges anonymous callers with Turnstile
+      // itself, sending the site key the widget needs.
+      if (!agentEnabled && API_CONFIG.ALLOW_ANON_ACCESS && !API_CONFIG.TURNSTILE_SITE_KEY) {
         console.warn(
           '[AccessQABot] Anonymous access is enabled without Turnstile. ' +
           'Set VITE_TURNSTILE_SITE_KEY for bot protection, or disable VITE_ALLOW_ANON_ACCESS.'
         );
       }
-    }, [agentBaseUrl, agentEnabled]);
+    }, [agentBaseUrl, agentEnabled, qaEndpoint]);
 
     // Fetch capabilities on mount (and when auth state changes).
     // Only runs in agent mode — in non-agentic mode, capabilities is
@@ -135,8 +154,13 @@ export const AccessQABot = forwardRef<AccessQABotRef, AccessQABotProps>(
 
       async function fetchCapabilities() {
         try {
+          // Sent anonymously: the agent's CORS doesn't allow credentials, and
+          // the only field used here, the welcome message, is the same for
+          // everyone. The response's `locked` and `is_authenticated` reflect
+          // an anonymous caller; anything that starts reading them needs this
+          // request to carry the token.
           const response = await fetch(capabilitiesEndpoint, {
-            credentials: 'include',
+            credentials: 'omit',
           });
           if (!response.ok) {
             throw new Error(`Capabilities API returned ${response.status}`);
@@ -156,38 +180,7 @@ export const AccessQABot = forwardRef<AccessQABotRef, AccessQABotProps>(
 
       fetchCapabilities();
       return () => { cancelled = true; };
-    }, [agentEnabled, capabilitiesEndpoint, isLoggedIn]);
-
-    // Lazy-load personalized context for authenticated users (F.4 will use this).
-    // Agent-only — skipped entirely in non-agentic mode.
-    // REACTIVATION: re-enabled automatically when AGENT_ENABLED flips to true.
-    useEffect(() => {
-      if (!agentEnabled) return;
-      if (!isLoggedIn) return;
-
-      let cancelled = false;
-      const personalizedUrl = `${agentBaseUrl}/capabilities/personalized`;
-
-      async function fetchPersonalized() {
-        try {
-          const response = await fetch(personalizedUrl, {
-            credentials: 'include',
-          });
-          if (!response.ok) return; // 401 for anonymous is expected
-          const data = await response.json();
-          if (!cancelled) {
-            // TODO (F.4): Use highlighted_capabilities and context for
-            // placeholder text rotation and agent system prompt enrichment
-            console.debug('Personalized context loaded:', data);
-          }
-        } catch {
-          // Non-critical — personalization is a nice-to-have
-        }
-      }
-
-      fetchPersonalized();
-      return () => { cancelled = true; };
-    }, [agentEnabled, agentBaseUrl, isLoggedIn]);
+    }, [agentEnabled, capabilitiesEndpoint, hostLoggedIn]);
 
     // Expose addMessage method via ref (maintains old API)
     useImperativeHandle(ref, () => ({
@@ -222,7 +215,7 @@ export const AccessQABot = forwardRef<AccessQABotRef, AccessQABotProps>(
     }, [onAnalyticsEvent, sessionId]);
 
     // Handler for core analytics events - forwards them to consumer
-    const handleCoreAnalyticsEvent = useCallback((event: { type: string; [key: string]: unknown }) => {
+    const handleCoreAnalyticsEvent = useCallback((event: QABotAnalyticsEvent) => {
       if (onAnalyticsEvent) {
         onAnalyticsEvent({
           ...event,
@@ -286,7 +279,7 @@ export const AccessQABot = forwardRef<AccessQABotRef, AccessQABotProps>(
       // Auto-set chatDisabled based on whether step has options/checkboxes
       // BUT the start step explicitly sets chatDisabled: false to allow typing
       return applyFlowSettings(rawFlow, { disableOnOptions: true });
-    }, [welcomeMessage, userInfo, sessionId, apiKey, isLoggedIn, trackEvent, capabilities, scope, embedded]);
+    }, [welcomeMessage, userInfo, sessionId, apiKey, hostLoggedIn, trackEvent, capabilities, scope, embedded]);
 
     // Wait for capabilities to load before rendering — the start step's
     // options are built from this data and react-chatbotify won't re-render
@@ -302,7 +295,10 @@ export const AccessQABot = forwardRef<AccessQABotRef, AccessQABotProps>(
         ref={botRef}
         // Login state - Q&A is gated when false unless anonymous access is enabled
         isLoggedIn={isLoggedIn}
-        allowAnonAccess={API_CONFIG.ALLOW_ANON_ACCESS}
+        // Agent sign-in allows anonymous questions: the agent decides which
+        // tools need sign-in, and qa-bot-core shows the sign-in prompt.
+        // Without it (flag off, or refused), the build-time setting holds.
+        allowAnonAccess={agentAuth ? true : API_CONFIG.ALLOW_ANON_ACCESS}
         actingUser={actingUser}
 
         // Analytics
@@ -310,7 +306,8 @@ export const AccessQABot = forwardRef<AccessQABotRef, AccessQABotProps>(
 
         // API configuration
         apiKey={apiKey}
-        qaEndpoint={qaEndpoint || API_CONFIG.QA_ENDPOINT}
+        qaEndpoint={effectiveQaEndpoint}
+        agentAuth={agentAuth ?? undefined}
         ratingEndpoint={ratingEndpoint || API_CONFIG.RATING_ENDPOINT}
         backendId={effectiveBackendId}
         // Agent-only endpoints — only forwarded when agent mode is enabled,

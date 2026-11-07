@@ -108,7 +108,7 @@ git push origin vX.Y.Z
 
 ### 7. Create GitHub Release
 
-- Go to: https://github.com/necyberteam/access-qa-bot/releases/new
+- Go to: https://github.com/connectci-platform/access-qa-bot/releases/new
 - Select the tag you created
 - Add title and description
 - Click "Publish release"
@@ -162,13 +162,14 @@ This is useful for:
 
 ## CDN Usage
 
-### 1. jsdelivr CDN (Git-based)
+### 1. jsdelivr CDN (npm-based)
 
-Pulls from GitHub based on git tags:
+Available after npm publish. jsDelivr's GitHub-based path doesn't work here,
+because `dist/` isn't committed:
 
 ```html
 <!-- Standalone bundle (includes Preact) -->
-<script src="https://cdn.jsdelivr.net/gh/necyberteam/access-qa-bot@v3.0.0/dist/access-qa-bot.standalone.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@snf/access-qa-bot@3.0.0/dist/access-qa-bot.standalone.js"></script>
 ```
 
 ### 2. unpkg CDN (npm-based)

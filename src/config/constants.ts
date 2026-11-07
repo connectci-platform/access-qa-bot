@@ -22,6 +22,11 @@ export const API_CONFIG = {
   get CAPABILITIES_ENDPOINT() { return `${this.AGENT_ENDPOINT}/capabilities`; },
   get AGENT_RATING_ENDPOINT() { return `${this.AGENT_ENDPOINT}/rating`; },
 
+  // The identity site that mints agent tokens and hosts sign-in, in agent
+  // mode. Baked at publish time like the other VITE_* values; a ddev build
+  // sets it to https://accessmatch.ddev.site.
+  SUPPORT_URL: (import.meta.env.VITE_SUPPORT_URL || 'https://support.access-ci.org').replace(/\/$/, ''),
+
   // Metrics/XDMoD API endpoints (unchanged — direct to UKY)
   METRICS_API_ENDPOINT: import.meta.env.VITE_METRICS_API_ENDPOINT || 'https://access-ai-grace1-external.ccs.uky.edu/access/xdmod/chat/api/',
   METRICS_RATING_ENDPOINT: import.meta.env.VITE_METRICS_RATING_ENDPOINT || 'https://access-ai-grace1-external.ccs.uky.edu/access/xdmod/chat/rating/',
