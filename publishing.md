@@ -87,7 +87,9 @@ git tag -l "v*"
 # Sync package-lock.json
 npm install
 
-# Build all outputs
+# Build all outputs. Production values (anonymous access, Turnstile key)
+# come from the committed .env.production, and prepack fails the publish
+# if they're missing from dist.
 npm run build
 
 # Commit version change and builds
